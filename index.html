@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f2340">
+<title>Gym Quest — Maths Gyms</title>
+<meta name="description" content="Choose a character, travel your continent and earn gym badges by answering every question right.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<link rel="stylesheet" href="css/app.css">
+<script defer src="vendor/katex/katex.min.js"></script>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <button class="icon-btn" id="back" aria-label="Back" hidden>&#8592;</button>
+    <div class="ttl" id="ttl">Gym Quest</div>
+    <button class="chip-btn" id="viewBtn" aria-label="Switch map view" hidden></button>
+    <button class="chip-btn" id="lbBtn" aria-label="Leaderboard" hidden>&#127942; Ranks</button>
+    <button class="me-btn" id="meBtn" aria-label="My profile" hidden></button>
+  </header>
+  <main id="screen" tabindex="-1"><noscript>Gym Quest needs JavaScript.</noscript></main>
+  <div id="toast" role="status" aria-live="polite"></div>
+</div>
+<script src="js/config.js"></script>
+<script src="js/answer-number.js"></script>
+<script src="js/world-data.js"></script>
+<script src="js/banks.js"></script>
+<script src="js/avatar.js"></script>
+<script src="js/backend.js"></script>
+<script src="js/world.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

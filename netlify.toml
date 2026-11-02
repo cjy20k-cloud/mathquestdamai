@@ -1,0 +1,14 @@
+# Separate Netlify site for Gym Quest.
+# In Netlify: New site > import this repo > set "Base directory" to  gym-quest  (build settings below are then picked up).
+[build]
+  publish = "dist"
+  command = "node tools/build-site.cjs"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
