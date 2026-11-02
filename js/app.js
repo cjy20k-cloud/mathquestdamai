@@ -1,4 +1,4 @@
-/* Gym Quest - profile, character, continent map, gyms, quiz, heat map, leaderboard. */
+/* Gym Quest - profile, character, continent map, gyms, quiz, leaderboard. */
 (function(){
 'use strict';
 var WORLD = window.GQ_WORLD, BANKS = window.GQ_BANKS || {}, AV = window.GQAvatar, BE = window.GQBackend;
@@ -26,7 +26,7 @@ function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){
 var toastT; function toast(msg){ var t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(function(){ t.classList.remove('on'); }, 2600); }
 
 /* ---------- constants ---------- */
-var K = {profile: 'gq.profile.v1', prog: 'gq.progress.v1', stats: 'gq.qstats.v1'};
+var K = {profile: 'gq.profile.v1', prog: 'gq.progress.v1'};
 var LV = ['', 'Sec 1', 'Sec 2', 'Sec 3', 'Sec 4'];
 var CONT = {
   G1: {name: 'Verdant Isles', icon: '🌴', hue: 140, blurb: 'The G1 continent: build strong foundations, one gym at a time.'},
@@ -54,7 +54,6 @@ function expertFor(g){
 /* ---------- state ---------- */
 var profile = load(K.profile, null);
 var prog = load(K.prog, {badges: {}, attempts: {}});
-var local = load(K.stats, {});
 var view = {name: 'home'}, backFn = null, keyFn = null, Q = null, WLD = null;
 var mapMode = load('gq.mapmode.v1', 'world');   // 'world' = walk-around map, 'list' = plain list of towns
 function badgeCount(){ return Object.keys(prog.badges).length; }
@@ -158,7 +157,7 @@ function openTalk(g){
   var line = !live ? 'I\'m still preparing my questions for the <b>' + esc(g.name) + '</b> gym. Come back soon!' : (b ? 'You already beat me! Want a rematch to see if you can still get all 10?' : 'Welcome to the <b>' + esc(g.name) + '</b> gym! Show me you really know this topic.');
   var d = WLD.dialog('<div class="dcard"><div class="dtop"><div class="dport">' + AV.svg(ex.cfg, {bust: true, label: 'Student expert'}) + '</div><div style="flex:1;min-width:0"><div class="dsub">Student expert</div><div class="dname">' + esc(ex.name) + '</div><div class="dsub" style="margin-top:2px">' + LV[lvl] + ' · ' + esc(g.name) + '</div></div>' + (b ? '<span class="medal" style="width:54px;height:54px;flex:none">' + badgeSVG(g) + '</span>' : '') + '</div>' +
     '<div class="dtext">' + line + '</div>' +
-    (live ? '<div class="rules">📝 ' + fmtText(lvl) + '<br>🎯 All 10 must be correct to earn the badge.<br>🔥 A heat map shows after every question.</div>' : '') +
+    (live ? '<div class="rules">📝 ' + fmtText(lvl) + '<br>🎯 All 10 must be correct to earn the badge.</div>' : '') +
     '<div class="row"><button class="btn ghost" id="dno">' + (live ? 'Not yet' : 'Close') + '</button>' + (live ? '<button class="btn primary" id="dgo">' + (b ? 'Rematch!' : 'Challenge!') + '</button>' : '') + '</div></div>');
   $('#dno', d).addEventListener('click', function(){ WLD.closeDialog(); });
   if (live){ $('#dgo', d).addEventListener('click', function(){ startQuiz(g); }); $('#dgo', d).focus(); } else $('#dno', d).focus();
@@ -205,7 +204,7 @@ function vGym(id){
   chrome(g.name, function(){ go('town', g.town.id); });
   var ex = expertFor(g), b = prog.badges[g.id], tries = prog.attempts[g.id] || 0, lvl = g.town.level;
   var s = screen('<div class="card"><div class="expert"><div class="big">' + AV.svg(ex.cfg, {label: 'Student expert'}) + '</div><div class="talk"><div class="tag-line">Student expert</div><h2>' + esc(ex.name) + '</h2><div class="bubble" style="margin-top:8px">' + (b ? 'You already beat me! Want to try again and see if you can still get all 10?' : 'Welcome to the <b>' + esc(g.name) + '</b> gym! Show me you really know this topic.') + '</div></div></div>' +
-    '<div class="rulebox">📝 ' + fmtText(lvl) + '<br>🎯 You must answer <b>all 10 correctly</b> to earn the badge.<br>🔍 After every question you see a heat map of which questions students get right and wrong.<br>🔁 Each attempt draws a fresh 10 from my bank of 20 questions.</div>' +
+    '<div class="rulebox">📝 ' + fmtText(lvl) + '<br>🎯 You must answer <b>all 10 correctly</b> to earn the badge.<br>🔁 Each attempt draws a fresh 10 from my bank of 20 questions.</div>' +
     '<div class="row" style="align-items:center;margin-bottom:12px"><div style="flex:0 0 66px"><span class="medal">' + badgeSVG(g) + '</span></div><div style="font-weight:800;font-size:14px;line-height:1.5">' + (b ? '🏅 Badge earned' : 'Badge not earned yet') + '<br><span style="color:var(--muted)">Attempts so far: ' + tries + '</span></div></div>' +
     '<button class="btn primary wide" id="start">' + (b ? 'Challenge again' : 'Start the challenge') + '</button></div>');
   $('#start', s).addEventListener('click', function(){ startQuiz(g); });
@@ -219,8 +218,7 @@ function pickQuiz(bank, level){
 }
 function startQuiz(g){
   var items = pickQuiz(BANKS[g.id], g.town.level);
-  Q = {gym: g, items: items, i: 0, results: [], checked: false, sel: null, entry: '', server: null};
-  BE.qstats(g.id).then(function(r){ if (Q && Q.gym === g && r && r.ok && !r.offline){ Q.server = r.stats || {}; if (view.name === 'quiz' && Q.checked) vQuestion(); } });
+  Q = {gym: g, items: items, i: 0, results: [], checked: false, sel: null, entry: ''};
   go('quiz');
 }
 function isRight(q, v){
@@ -229,25 +227,6 @@ function isRight(q, v){
   return isFinite(n) && Math.abs(n - q.a) <= 1e-6 * Math.max(1, Math.abs(q.a));
 }
 function fmtAns(q){ return q.t === 'mcq' ? rich(q.opts[q.a]) : rich('$' + String(+q.a) + '$'); }
-function statFor(qid){
-  if (Q && Q.server){ var s = Q.server[qid] || {c: 0, w: 0}, c = s.c, w = s.w; Q.results.forEach(function(r){ if (r && r.id === qid){ if (r.ok) c++; else w++; } }); return {c: c, w: w}; }
-  return local[qid] || {c: 0, w: 0};
-}
-function heat(){
-  var g = Q.gym, bank = BANKS[g.id], inQ = {}, res = {}, cur = Q.items[Q.i] && Q.items[Q.i].id;
-  Q.items.forEach(function(q){ inQ[q.id] = 1; }); Q.results.forEach(function(r){ if (r) res[r.id] = r.ok; });
-  var worst = null;
-  var cells = bank.map(function(q, i){
-    var st = statFor(q.id), n = st.c + st.w, rate = n ? st.c / n : null;
-    if (n && (!worst || rate < worst.rate)) worst = {i: i + 1, rate: rate, n: n};
-    var col = n ? 'hsl(' + Math.round(rate * 120) + ',70%,' + (55 + Math.round((1 - Math.abs(rate - .5) * 2) * 6)) + '%)' : '#dcdeea';
-    var tip = 'Q' + (i + 1) + ': ' + (n ? Math.round(rate * 100) + '% correct (' + st.c + ' of ' + n + ' answers)' : 'no answers yet');
-    return '<div class="hc' + (inQ[q.id] ? ' inq' : '') + (q.id === cur ? ' cur' : '') + '" style="background:' + col + '" title="' + tip + '" aria-label="' + tip + '">' + (i + 1) + (q.id in res ? '<span class="mk">' + (res[q.id] ? '✅' : '❌') + '</span>' : '') + '</div>';
-  }).join('');
-  var scope = Q.server ? 'all students who have tried this gym' : 'attempts on this device';
-  return '<div class="heat"><h4>🔥 Question heat map</h4><div class="sub">Colour = how often questions are answered correctly by ' + scope + '. Dark outline = in your quiz. ✅ / ❌ = your answers.</div><div class="hgrid">' + cells + '</div><div class="legend"><span>Often wrong</span><i></i><span>Often right</span></div>' +
-    (worst ? '<div class="sub" style="margin-top:8px">Toughest so far: <b>Q' + worst.i + '</b> (' + Math.round(worst.rate * 100) + '% correct from ' + worst.n + ' answer' + (worst.n === 1 ? '' : 's') + ')</div>' : '<div class="sub" style="margin-top:8px">No answers recorded yet. You are the first!</div>') + '</div>';
-}
 function vQuestion(){
   var q = Q.items[Q.i], n = Q.items.length, g = Q.gym, ck = Q.checked, last = Q.results[Q.i];
   chrome(g.name, function(){ if (window.confirm('Leave the challenge? You will lose this attempt.')) backToGym(g); });
@@ -263,7 +242,7 @@ function vQuestion(){
   } else body = '<div class="entry" style="border-style:solid;border-color:' + (last.ok ? 'var(--good)' : 'var(--bad)') + '">' + esc(last.shown) + '</div>';
   var fb = '';
   if (ck){
-    fb = '<div class="fb ' + (last.ok ? 'good' : 'bad') + '"><h3>' + (last.ok ? '✅ Correct!' : '❌ Not quite') + '</h3>' + (last.ok ? '' : '<div class="ans">Correct answer: ' + fmtAns(q) + '</div>') + (q.w ? '<div class="work">' + (last.ok ? '' : '<b>How to solve it:</b> ') + rich(q.w) + '</div>' : '') + '</div>' + heat() +
+    fb = '<div class="fb ' + (last.ok ? 'good' : 'bad') + '"><h3>' + (last.ok ? '✅ Correct!' : '❌ Not quite') + '</h3>' + (last.ok ? '' : '<div class="ans">Correct answer: ' + fmtAns(q) + '</div>') + (q.w ? '<div class="work">' + (last.ok ? '' : '<b>How to solve it:</b> ') + rich(q.w) + '</div>' : '') + '</div>' +
       '<button class="btn primary wide" id="next" style="margin-top:14px">' + (Q.i + 1 < n ? 'Next question' : 'See my results') + '</button>';
   } else fb = '<button class="btn primary wide" id="check" style="margin-top:14px"' + (q.t === 'mcq' && Q.sel === null ? ' disabled' : '') + '>Check answer</button>';
   var s = screen('<div class="dots" aria-label="Progress">' + dots + '</div><div class="card"><div class="qmeta"><span>Question ' + (Q.i + 1) + ' of ' + n + '</span><span class="qtype' + (q.word ? ' word' : '') + '">' + (q.word ? 'Word problem' : (q.t === 'mcq' ? 'Multiple choice' : 'Answer blank')) + '</span></div><div class="qtext">' + rich(q.q) + '</div>' + body + fb + '</div>');
@@ -289,7 +268,6 @@ function check(){
   if (q.t === 'mcq'){ if (Q.sel === null) return; given = Q.sel; ok = isRight(q, given); shown = q.opts[given]; }
   else { if (!Q.entry){ var el = $('#entry'); if (el){ el.classList.add('shake'); setTimeout(function(){ el.classList.remove('shake'); }, 400); } return; } given = Q.entry; ok = isRight(q, given); shown = Q.entry; }
   Q.results[Q.i] = {id: q.id, ok: ok, given: given, shown: shown}; Q.checked = true;
-  var l = local[q.id] || {c: 0, w: 0}; local[q.id] = {c: l.c + (ok ? 1 : 0), w: l.w + (ok ? 0 : 1)}; save(K.stats, local);
   vQuestion();
 }
 function next(){
@@ -302,15 +280,13 @@ function vResult(){
   prog.attempts[g.id] = (prog.attempts[g.id] || 0) + 1;
   if (first){ prog.badges[g.id] = {at: Date.now(), score: score}; }
   save(K.prog, prog);
-  BE.report(g.id, Q.results.map(function(r){ return {id: r.id, ok: r.ok}; }));
   if (first) BE.score({name: profile.name, stream: profile.stream, level: profile.level, gyms: Object.keys(prog.badges), avatar: profile.char});
   chrome('Results', function(){ backToGym(g); });
   var rev = Q.items.map(function(q, i){ var r = Q.results[i];
     return '<div class="rv' + (r.ok ? '' : ' no') + '"><b>' + (r.ok ? '✅' : '❌') + ' Q' + (i + 1) + '.</b> ' + rich(q.q) + (r.ok ? '' : '<br><b>Correct answer:</b> ' + fmtAns(q) + (q.w ? '<br>' + rich(q.w) : '')) + '</div>'; }).join('');
-  Q.i = n;   // heat map: no "current" cell
   var s = screen('<div class="card" style="text-align:center">' + (passed ? '<span class="medal" style="width:96px;height:96px">' + badgeSVG(g) + '</span><h2>' + (first ? 'Badge earned!' : 'Perfect again!') + '</h2><p class="lead">You answered all ' + n + ' questions correctly in the ' + esc(g.name) + ' gym.</p>' : '<div class="score">' + score + '/' + n + '</div><h2>So close!</h2><p class="lead">You need all ' + n + ' correct to earn the badge. Study the answers below and try again with a fresh set.</p>') +
     '<div class="row"><button class="btn ghost" id="town">' + (mapMode === 'world' ? 'Back to the map' : 'Back to the town') + '</button><button class="btn primary" id="again">' + (passed ? 'Play again' : 'Try again') + '</button></div></div>' +
-    '<div class="card">' + heat() + '</div><div class="card"><h2>Review</h2><div class="review">' + rev + '</div></div>');
+    '<div class="card"><h2>Review</h2><div class="review">' + rev + '</div></div>');
   $('#town', s).addEventListener('click', function(){ backToGym(g); });
   $('#again', s).addEventListener('click', function(){ startQuiz(g); });
   if (first) toast('🏅 New badge: ' + g.name);

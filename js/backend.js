@@ -20,9 +20,6 @@ window.GQBackend = {
   register: function(p){ return enabled() ? post('register', p).catch(function(){ return {ok: true, offline: true}; }) : offline(); },
   /* send the student's full badge list; the server counts them */
   score: function(p){ return enabled() ? post('score', p).catch(function(){ return {ok: false}; }) : offline(); },
-  /* per-question right/wrong counts from a finished quiz: [{id, ok}] */
-  report: function(gymId, results){ return enabled() ? post('report', {gym: gymId, results: results}).catch(function(){ return {ok: false}; }) : offline(); },
-  qstats: function(gymId){ return enabled() ? get('qstats', {gym: gymId}).catch(function(){ return {ok: false}; }) : Promise.resolve({ok: true, offline: true, stats: {}}); },
   leaderboard: function(){ return enabled() ? get('leaderboard').catch(function(){ return {ok: false}; }) : Promise.resolve({ok: true, offline: true, rows: []}); }
 };
 })();

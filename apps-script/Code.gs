@@ -1,5 +1,5 @@
 /**
- * Gym Quest leaderboard + question heat-map backend (Google Apps Script).
+ * Gym Quest leaderboard backend (Google Apps Script).
  *
  * Setup: create a Google Sheet > Extensions > Apps Script > paste this file > change KEY below >
  * Deploy > New deployment > type "Web app" > Execute as "Me", Who has access "Anyone" >
@@ -8,7 +8,6 @@
  * Sheets (created automatically):
  *   Profiles : one row per student. A name can be registered only once ("one profile per student").
  *   Scores   : one row per student with their badge list and badge count (the leaderboard).
- *   QStats   : one row per question id with total correct / wrong answers (the heat map).
  */
 var KEY = 'gq-change-me';
 
@@ -27,8 +26,6 @@ function handle_(p) {
     switch (p.action) {
       case 'register': return out_(register_(p));
       case 'score': return out_(score_(p));
-      case 'report': return out_(report_(p));
-      case 'qstats': return out_(qstats_(p));
       case 'leaderboard': return out_(leaderboard_());
       default: return out_({ ok: false, error: 'unknown action' });
     }
@@ -63,28 +60,6 @@ function score_(p) {
   var vals = [key, name, clean_(p.stream, 2), Number(p.level) || 1, gyms.length, new Date(), JSON.stringify(p.avatar || {}).substring(0, 400), gyms.join(',')];
   if (row < 0) sh.appendRow(vals); else sh.getRange(row, 1, 1, vals.length).setValues([vals]);
   return { ok: true, badges: gyms.length };
-}
-
-function report_(p) {
-  var results = (p.results || []).slice(0, 40);
-  var sh = sheet_('QStats', ['qid', 'correct', 'wrong']);
-  var data = sh.getDataRange().getValues(), index = {};
-  for (var i = 1; i < data.length; i++) index[data[i][0]] = i + 1;
-  results.forEach(function (r) {
-    var id = clean_(r.id, 80); if (!id) return;
-    var row = index[id];
-    if (!row) { sh.appendRow([id, 0, 0]); row = sh.getLastRow(); index[id] = row; }
-    var col = r.ok ? 2 : 3;
-    sh.getRange(row, col).setValue((Number(sh.getRange(row, col).getValue()) || 0) + 1);
-  });
-  return { ok: true };
-}
-
-function qstats_(p) {
-  var prefix = clean_(p.gym, 80) + '.q', sh = sheet_('QStats', ['qid', 'correct', 'wrong']);
-  var data = sh.getDataRange().getValues(), stats = {};
-  for (var i = 1; i < data.length; i++) if (String(data[i][0]).indexOf(prefix) === 0) stats[data[i][0]] = { c: Number(data[i][1]) || 0, w: Number(data[i][2]) || 0 };
-  return { ok: true, stats: stats };
 }
 
 function leaderboard_() {

@@ -3,7 +3,6 @@
 A separate app (own Netlify site) for gym-style maths quizzes. Students make **one locked profile**
 (name, stream G1/G2/G3, level Sec 1-4), design a character, travel their stream's continent, and
 challenge a **student expert** in each gym. Answer all 10 questions right to earn the gym badge.
-After every question a **heat map** shows which questions students get right and wrong.
 
 ## What is in here
 
@@ -14,8 +13,8 @@ After every question a **heat map** shows which questions students get right and
 | `js/world.js` | The walk-around map (canvas): towns, gym buildings, an expert at every door, level gates, continent map, touch D-pad |
 | `js/world-data.js` | Generated: 3 continents > towns (topics) > gyms (sub topics) |
 | `js/banks.js` | Generated: the fixed 20-question bank for every gym that has one |
-| `js/backend.js`, `js/config.js` | Leaderboard / heat-map client. Set `ENDPOINT` in `config.js` |
-| `apps-script/Code.gs` | Google Apps Script backend (leaderboard, one-profile registry, heat-map counts) |
+| `js/backend.js`, `js/config.js` | Leaderboard client. Set `ENDPOINT` in `config.js` |
+| `apps-script/Code.gs` | Google Apps Script backend (leaderboard and one-profile registry) |
 | `tools/build-world.cjs` | Rebuilds `world-data.js` from the main app's `app-catalog.js` |
 | `tools/build-banks.cjs` | Rebuilds `banks.js` from the question generators |
 | `tools/build-site.cjs` | Netlify build: copies only the app files into `dist/` |
@@ -32,15 +31,13 @@ After every question a **heat map** shows which questions students get right and
 * **Question formats** (by the gym's level, same pattern for G1/G2/G3):
   Sec 1 = 20 multiple choice; Sec 2 = 10 answer-blank + 10 multiple choice; Sec 3/4 = 20 answer-blank including
   5 word problems. A quiz uses 10 of the 20 (Sec 3/4: 3 word problems + 7 others).
-* **Heat map**: shown after every question and on the results page. Colour = % of answers that were correct
-  (all students when the backend is connected, this device otherwise).
 
 ## Deploying
 
-1. **Netlify**: New site from this repo, set *Base directory* to `gym-quest`. `netlify.toml` does the rest.
+1. **Netlify**: New site from the `mathquestdamai` repo (the app is at the repo root, so leave *Base directory* empty). `netlify.toml` does the rest. If you deploy from the main project instead, set *Base directory* to `gym-quest`.
 2. **Leaderboard** (optional until ready): create a Google Sheet > Extensions > Apps Script > paste `apps-script/Code.gs`,
    change `KEY`, then Deploy > Web app (Execute as *Me*, access *Anyone*). Put the `/exec` URL and the same key into
-   `js/config.js`. Until then the app works fully, but the leaderboard and heat map only use this device.
+   `js/config.js`. Until then the app works fully, but the leaderboard only uses this device.
 3. **Link from the main app**: add the Netlify URL to the main app's sidebar (not done yet because the URL does not exist yet).
 
 ## Adding questions
