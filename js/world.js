@@ -298,6 +298,35 @@ function create(host, o){
     cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
     var vis = Math.max(10, Math.min(22, Math.round(vw / 46))); sc = vw / (vis * T);
   }
+  function drawBubble(c, cx, bottom, text){
+    c.font = '800 11px Nunito,system-ui,sans-serif'; c.textAlign = 'center';
+    var words = String(text).split(' '), lines = [], cur = '';
+    words.forEach(function(w){ var t = cur ? cur + ' ' + w : w; if (c.measureText(t).width > 128 && cur){ lines.push(cur); cur = w; } else cur = t; });
+    if (cur) lines.push(cur);
+    lines = lines.slice(0, 3);
+    var lw = 0; lines.forEach(function(l){ lw = Math.max(lw, c.measureText(l).width); });
+    var w = lw + 18, h = lines.length * 13 + 11, x = cx - w / 2, y = bottom - h - 8;
+    c.fillStyle = 'rgba(0,0,0,.18)'; rr(c, x + 2, y + 3, w, h, 10); c.fill();
+    c.fillStyle = '#fff'; c.strokeStyle = '#2E2C3F'; c.lineWidth = 2; rr(c, x, y, w, h, 10); c.fill(); c.stroke();
+    c.beginPath(); c.moveTo(cx - 6, y + h - 1); c.lineTo(cx, bottom); c.lineTo(cx + 6, y + h - 1); c.closePath(); c.fillStyle = '#fff'; c.fill();
+    c.beginPath(); c.moveTo(cx - 6, y + h); c.lineTo(cx, bottom); c.lineTo(cx + 6, y + h); c.strokeStyle = '#2E2C3F'; c.stroke();
+    c.fillStyle = '#fff'; c.fillRect(cx - 5, y + h - 1.5, 10, 3);
+    c.fillStyle = '#2E2C3F'; lines.forEach(function(l, i){ c.fillText(l, cx, y + 15 + i * 13); });
+  }
+  /* the experts nearest the player (up to two) speak; their line changes every few seconds */
+  function chatter(x0, x1, y0, y1){
+    if (!o.say) return;
+    var near = [];
+    npcs.forEach(function(n){
+      if (n.gym.town.level > o.level || n.x < x0 || n.x > x1 || n.y < y0 || n.y > y1) return;
+      var d = Math.abs(n.x - P.x) + Math.abs(n.y - P.y); if (d <= 6) near.push({n: n, d: d});
+    });
+    near.sort(function(a, b){ return a.d - b.d; });
+    near.slice(0, 2).forEach(function(e){
+      var n = e.n, salt = Math.floor((now + n.x * 613 + n.y * 211) / 7000);
+      drawBubble(ctx, n.x * T + T / 2, n.y * T - 18, o.say(n.gym, salt));
+    });
+  }
   function render(){
     if (!vw) return;
     var px = (P.x + (P.tx - P.x) * P.t) * T, py = (P.y + (P.ty - P.y) * P.t) * T;
@@ -313,16 +342,12 @@ function create(host, o){
     buildings.forEach(function(b){ if (b.x + 4 >= x0 && b.x <= x1 && b.y + 3 >= y0 - 2 && b.y <= y1) items.push({k: b.y + 3, f: drawBuilding.bind(null, ctx, b)}); });
     npcs.forEach(function(n){ if (n.x >= x0 && n.x <= x1 && n.y >= y0 && n.y <= y1) items.push({k: n.y + 0.9, f: function(){
       drawPerson(ctx, n.x * T, n.y * T, n.cfg, 0, false);
-      if (o.hasBank(n.gym) && !won(n.gym) && !(n.gym.town.level > o.level) && Math.abs(n.x - P.x) + Math.abs(n.y - P.y) <= 4){
-        var by = n.y * T - 56 + Math.sin(now / 200) * 2;
-        ctx.fillStyle = '#fff'; ctx.strokeStyle = '#e03131'; ctx.lineWidth = 2; rr(ctx, n.x * T + 7, by, 18, 18, 6); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#e03131'; ctx.font = '900 14px Nunito,sans-serif'; ctx.textAlign = 'center'; ctx.fillText('!', n.x * T + 16, by + 14);
-      }
     }}); });
     items.push({k: py / T + 0.9, f: function(){ drawPerson(ctx, px, py, o.char, P.moving ? P.step : 0, true); }});
     items.sort(function(a, b){ return a.k - b.k; }).forEach(function(it){ it.f(); });
     if (lockY >= 0){ ctx.fillStyle = 'rgba(30,30,60,.30)'; ctx.fillRect(0, lockY * T, W * T, (H - lockY) * T); }
     gates.forEach(function(g){ if (g.y + 3 >= y0 && g.y - 3 <= y1) drawGate(ctx, g); });
+    if (mode === 'world' || mode === 'overview') chatter(x0, x1, y0, y1);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     var near = null;
     for (var bi = 0; bi < buildings.length; bi++){ var b = buildings[bi]; if (Math.abs(P.x - (b.x + 1)) <= 2 && P.y >= b.y + 3 && P.y <= b.y + 5){ near = b.gym; break; } }

@@ -1,7 +1,7 @@
 /* Gym Quest - profile, character, continent map, gyms, quiz, leaderboard. */
 (function(){
 'use strict';
-var WORLD = window.GQ_WORLD, BANKS = window.GQ_BANKS || {}, AV = window.GQAvatar, BE = window.GQBackend;
+var WORLD = window.GQ_WORLD, BANKS = window.GQ_BANKS || {}, AV = window.GQAvatar, BE = window.GQBackend, PER = window.GQPersona;
 
 /* ---------- helpers ---------- */
 function $(s, el){ return (el || document).querySelector(s); }
@@ -48,7 +48,7 @@ function hasBank(g){ return !!BANKS[g.id]; }
 function gymHue(g){ return hashStr(g.id) % 360; }
 function expertFor(g){
   var h = hashStr('expert:' + g.id), cfg = AV.randomCfg('expert:' + g.id), nm = NAMES[cfg.sex];
-  return {name: nm[(h >>> 4) % nm.length], cfg: cfg};
+  return {name: nm[(h >>> 4) % nm.length], cfg: cfg, persona: PER.of(g.id)};
 }
 
 /* ---------- state ---------- */
@@ -56,6 +56,8 @@ var profile = load(K.profile, null);
 var prog = load(K.prog, {badges: {}, attempts: {}});
 var view = {name: 'home'}, backFn = null, keyFn = null, Q = null, WLD = null;
 var mapMode = load('gq.mapmode.v1', 'world');   // 'world' = walk-around map, 'list' = plain list of towns
+function firstName(){ return profile ? profile.name.split(' ')[0] : ''; }
+function sayFor(g, kind, salt){ return PER.say(g.id, kind, salt, firstName()); }
 function badgeCount(){ return Object.keys(prog.badges).length; }
 function townBadges(t){ return t.gyms.filter(function(g){ return prog.badges[g.id]; }).length; }
 function allowed(t){ return profile && t.stream === profile.stream && t.level <= profile.level; }
@@ -149,13 +151,14 @@ function vMap(arg){
   WLD = GQWorld.create($('#wld', s), {
     stream: profile.stream, continent: c, name: info.name, level: profile.level, levelNames: LV, char: profile.char, svg: AV.svg,
     expertFor: expertFor, won: function(g){ return !!prog.badges[g.id]; }, hasBank: hasBank, gymHue: gymHue,
+    say: function(g, salt){ return sayFor(g, !hasBank(g) ? 'soon' : (prog.badges[g.id] ? 'beaten' : 'idle'), salt); },
     pos: prog.pos, focus: arg && arg.focus, onPos: function(p){ prog.pos = p; save(K.prog, prog); }, onTalk: openTalk
   });
 }
 function openTalk(g){
   var ex = expertFor(g), b = prog.badges[g.id], live = hasBank(g), lvl = g.town.level;
-  var line = !live ? 'I\'m still preparing my questions for the <b>' + esc(g.name) + '</b> gym. Come back soon!' : (b ? 'You already beat me! Want a rematch to see if you can still get all 10?' : 'Welcome to the <b>' + esc(g.name) + '</b> gym! Show me you really know this topic.');
-  var d = WLD.dialog('<div class="dcard"><div class="dtop"><div class="dport">' + AV.svg(ex.cfg, {bust: true, label: 'Student expert'}) + '</div><div style="flex:1;min-width:0"><div class="dsub">Student expert</div><div class="dname">' + esc(ex.name) + '</div><div class="dsub" style="margin-top:2px">' + LV[lvl] + ' · ' + esc(g.name) + '</div></div>' + (b ? '<span class="medal" style="width:54px;height:54px;flex:none">' + badgeSVG(g) + '</span>' : '') + '</div>' +
+  var line = esc(sayFor(g, !live ? 'soon' : (b ? 'beaten' : 'greet'), 0)) + (live ? '<br><span style="color:var(--muted);font-size:13px">Welcome to the <b>' + esc(g.name) + '</b> gym. Show me you really know this topic.</span>' : '');
+  var d = WLD.dialog('<div class="dcard"><div class="dtop"><div class="dport">' + AV.svg(ex.cfg, {bust: true, label: 'Student expert'}) + '</div><div style="flex:1;min-width:0"><div class="dsub">Student expert · ' + esc(ex.persona.tag) + '</div><div class="dname">' + esc(ex.name) + '</div><div class="dsub" style="margin-top:2px">' + LV[lvl] + ' · ' + esc(g.name) + '</div></div>' + (b ? '<span class="medal" style="width:54px;height:54px;flex:none">' + badgeSVG(g) + '</span>' : '') + '</div>' +
     '<div class="dtext">' + line + '</div>' +
     (live ? '<div class="rules">📝 ' + fmtText(lvl) + '<br>🎯 All 10 must be correct to earn the badge.</div>' : '') +
     '<div class="row"><button class="btn ghost" id="dno">' + (live ? 'Not yet' : 'Close') + '</button>' + (live ? '<button class="btn primary" id="dgo">' + (b ? 'Rematch!' : 'Challenge!') + '</button>' : '') + '</div></div>');
@@ -218,7 +221,7 @@ function pickQuiz(bank, level){
 }
 function startQuiz(g){
   var items = pickQuiz(BANKS[g.id], g.town.level);
-  Q = {gym: g, items: items, i: 0, results: [], checked: false, sel: null, entry: ''};
+  Q = {seed: Math.random().toString(36).slice(2), said: {}, gym: g, items: items, i: 0, results: [], checked: false, sel: null, entry: ''};
   go('quiz');
 }
 function isRight(q, v){
@@ -227,6 +230,12 @@ function isRight(q, v){
   return isFinite(n) && Math.abs(n - q.a) <= 1e-6 * Math.max(1, Math.abs(q.a));
 }
 function fmtAns(q){ return q.t === 'mcq' ? rich(q.opts[q.a]) : rich('$' + String(+q.a) + '$'); }
+function runLen(){ var k = 0; for (var j = Q.i; j >= 0 && Q.results[j] && Q.results[j].ok; j--) k++; return k; }
+function coach(kind, i){
+  var g = Q.gym, ex = expertFor(g), key = kind + i;
+  if (!Q.said[key]) Q.said[key] = PER.say(g.id, kind, Q.seed + ':' + i, firstName());
+  return '<div class="coach"><div class="cav">' + AV.svg(ex.cfg, {bust: true, label: ex.name}) + '</div><div class="say"><small>' + esc(ex.name) + ' · ' + esc(ex.persona.tag) + '</small>' + esc(Q.said[key]) + '</div></div>';
+}
 function vQuestion(){
   var q = Q.items[Q.i], n = Q.items.length, g = Q.gym, ck = Q.checked, last = Q.results[Q.i];
   chrome(g.name, function(){ if (window.confirm('Leave the challenge? You will lose this attempt.')) backToGym(g); });
@@ -245,7 +254,8 @@ function vQuestion(){
     fb = '<div class="fb ' + (last.ok ? 'good' : 'bad') + '"><h3>' + (last.ok ? '✅ Correct!' : '❌ Not quite') + '</h3>' + (last.ok ? '' : '<div class="ans">Correct answer: ' + fmtAns(q) + '</div>') + (q.w ? '<div class="work">' + (last.ok ? '' : '<b>How to solve it:</b> ') + rich(q.w) + '</div>' : '') + '</div>' +
       '<button class="btn primary wide" id="next" style="margin-top:14px">' + (Q.i + 1 < n ? 'Next question' : 'See my results') + '</button>';
   } else fb = '<button class="btn primary wide" id="check" style="margin-top:14px"' + (q.t === 'mcq' && Q.sel === null ? ' disabled' : '') + '>Check answer</button>';
-  var s = screen('<div class="dots" aria-label="Progress">' + dots + '</div><div class="card"><div class="qmeta"><span>Question ' + (Q.i + 1) + ' of ' + n + '</span><span class="qtype' + (q.word ? ' word' : '') + '">' + (q.word ? 'Word problem' : (q.t === 'mcq' ? 'Multiple choice' : 'Answer blank')) + '</span></div><div class="qtext">' + rich(q.q) + '</div>' + body + fb + '</div>');
+  var kind = ck ? (last.ok ? (runLen() % 3 === 0 ? 'streak' : 'right') : 'wrong') : (Q.i === 0 ? 'start' : (Q.i === n - 1 ? 'last' : 'think'));
+  var s = screen('<div class="dots" aria-label="Progress">' + dots + '</div>' + coach(kind, Q.i) + '<div class="card"><div class="qmeta"><span>Question ' + (Q.i + 1) + ' of ' + n + '</span><span class="qtype' + (q.word ? ' word' : '') + '">' + (q.word ? 'Word problem' : (q.t === 'mcq' ? 'Multiple choice' : 'Answer blank')) + '</span></div><div class="qtext">' + rich(q.q) + '</div>' + body + fb + '</div>');
   if (q.t === 'mcq' && !ck) $$('.choice', s).forEach(function(b){ b.addEventListener('click', function(){ Q.sel = +b.dataset.i; vQuestion(); }); });
   if (q.t === 'blank' && !ck) $$('#pad button', s).forEach(function(b){ b.addEventListener('click', function(){ type(b.dataset.k); }); });
   if ($('#check', s)) $('#check', s).addEventListener('click', check);
@@ -284,7 +294,7 @@ function vResult(){
   chrome('Results', function(){ backToGym(g); });
   var rev = Q.items.map(function(q, i){ var r = Q.results[i];
     return '<div class="rv' + (r.ok ? '' : ' no') + '"><b>' + (r.ok ? '✅' : '❌') + ' Q' + (i + 1) + '.</b> ' + rich(q.q) + (r.ok ? '' : '<br><b>Correct answer:</b> ' + fmtAns(q) + (q.w ? '<br>' + rich(q.w) : '')) + '</div>'; }).join('');
-  var s = screen('<div class="card" style="text-align:center">' + (passed ? '<span class="medal" style="width:96px;height:96px">' + badgeSVG(g) + '</span><h2>' + (first ? 'Badge earned!' : 'Perfect again!') + '</h2><p class="lead">You answered all ' + n + ' questions correctly in the ' + esc(g.name) + ' gym.</p>' : '<div class="score">' + score + '/' + n + '</div><h2>So close!</h2><p class="lead">You need all ' + n + ' correct to earn the badge. Study the answers below and try again with a fresh set.</p>') +
+  var s = screen(coach(passed ? 'win' : 'lose', 'res') + '<div class="card" style="text-align:center">' + (passed ? '<span class="medal" style="width:96px;height:96px">' + badgeSVG(g) + '</span><h2>' + (first ? 'Badge earned!' : 'Perfect again!') + '</h2><p class="lead">You answered all ' + n + ' questions correctly in the ' + esc(g.name) + ' gym.</p>' : '<div class="score">' + score + '/' + n + '</div><h2>So close!</h2><p class="lead">You need all ' + n + ' correct to earn the badge. Study the answers below and try again with a fresh set.</p>') +
     '<div class="row"><button class="btn ghost" id="town">' + (mapMode === 'world' ? 'Back to the map' : 'Back to the town') + '</button><button class="btn primary" id="again">' + (passed ? 'Play again' : 'Try again') + '</button></div></div>' +
     '<div class="card"><h2>Review</h2><div class="review">' + rev + '</div></div>');
   $('#town', s).addEventListener('click', function(){ backToGym(g); });
