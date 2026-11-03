@@ -42,7 +42,7 @@ var NAMES = {
 
 /* ---------- world index ---------- */
 var gyms = {}, towns = {};
-WORLD.continents.forEach(function(c){ c.towns.forEach(function(t){ t.stream = c.stream; towns[t.id] = t; t.gyms.forEach(function(g){ g.town = t; gyms[g.id] = g; }); }); });
+WORLD.continents.forEach(function(c){ var ord = 0; c.towns.forEach(function(t){ t.stream = c.stream; towns[t.id] = t; t.gyms.forEach(function(g){ g.town = t; g.ord = ++ord; gyms[g.id] = g; }); }); });
 function contOf(stream){ return WORLD.continents.filter(function(c){ return c.stream === stream; })[0]; }
 function hasBank(g){ return !!BANKS[g.id]; }
 function gymHue(g){ return hashStr(g.id) % 360; }
@@ -54,11 +54,36 @@ function expertFor(g){
 /* ---------- state ---------- */
 var profile = load(K.profile, null);
 var prog = load(K.prog, {badges: {}, attempts: {}});
+if (!prog.best) prog.best = {};   // best score per gym, so the class dashboards can show quizzes that did not earn a badge
 var view = {name: 'home'}, backFn = null, keyFn = null, Q = null, WLD = null;
 var mapMode = load('gq.mapmode.v1', 'world');   // 'world' = walk-around map, 'list' = plain list of towns
 function firstName(){ return profile ? profile.name.split(' ')[0] : ''; }
 function sayFor(g, kind, salt){ return PER.say(g.id, kind, salt, firstName()); }
 function badgeCount(){ return Object.keys(prog.badges).length; }
+
+/* ---------- class link (teacher dashboard + My Progress page) ---------- */
+/* gyms this student can enter (their stream, towns up to their level): the denominator of their completion rate */
+function openGyms(){ return Object.keys(gyms).filter(function(id){ var t = gyms[id].town; return t.stream === profile.stream && t.level <= profile.level; }).length; }
+function classBase(){ return {classCode: profile.classCode, name: profile.name, stream: profile.stream, level: profile.level, gymsTotal: openGyms()}; }
+function ansText(q){ return q.t === 'mcq' ? String(q.opts[q.a]) : String(+q.a); }
+function sendResult(g, score, n, passed){
+  if (!window.GQClass || !profile.classCode) return;
+  var right = [], wrong = [];
+  Q.items.forEach(function(q, i){ var r = Q.results[i]; if (!r) return;
+    if (r.ok) right.push(q.id); else wrong.push({id: q.id, q: String(q.q).slice(0, 400), a: ansText(q).slice(0, 120), g: String(r.shown == null ? '' : r.shown).slice(0, 60)}); });
+  GQClass.result(Object.assign(classBase(), {gym: g.id, gymName: g.name, town: g.town.name, lv: g.town.level, ord: g.ord, score: score, total: n, passed: passed, badges: badgeCount(), wrong: wrong, right: right}));
+}
+/* everything the student has already done, so a class code added later still shows the whole history */
+function sendHistory(){
+  if (!window.GQClass || !profile.classCode) return Promise.resolve('no class');
+  var seen = {}, rows = [];
+  Object.keys(prog.attempts).concat(Object.keys(prog.badges)).forEach(function(id){ var g = gyms[id]; if (!g || seen[id]) return; seen[id] = 1;
+    var b = prog.badges[id]; rows.push({gym: id, gymName: g.name, town: g.town.name, lv: g.town.level, ord: g.ord, best: Math.max(prog.best[id] || 0, b ? b.score : 0), attempts: prog.attempts[id] || (b ? 1 : 0), passed: !!b, at: b ? b.at : 0}); });
+  return GQClass.sync(Object.assign(classBase(), {rows: rows}));
+}
+function classNote(st){
+  return st === 'ok' ? '✅ Linked. Your teacher can see your badges and scores.' : st === 'unknown class' ? '⚠️ That class code was not recognised. Check it with your teacher.' : st === 'offline' ? '📡 Could not reach the class server. Your results are saved on this device and will be sent later.' : st === 'no class' ? 'Add your class code so your teacher can see your badges and scores.' : '';
+}
 function townBadges(t){ return t.gyms.filter(function(g){ return prog.badges[g.id]; }).length; }
 function allowed(t){ return profile && t.stream === profile.stream && t.level <= profile.level; }
 
@@ -100,7 +125,8 @@ function vProfile(){
     '<label class="lbl" for="nm">Name</label><input class="inp" id="nm" maxlength="30" autocomplete="off" placeholder="e.g. Tan Wei Ming 2A">' +
     '<label class="lbl">Stream</label><div class="seg c3" id="stream">' + ['G1', 'G2', 'G3'].map(function(x){ return '<button class="opt" data-v="' + x + '" aria-pressed="false">' + x + '<small>' + STREAM_DESC[x] + '</small></button>'; }).join('') + '</div>' +
     '<label class="lbl">Level</label><div class="seg c4" id="level">' + [1, 2, 3, 4].map(function(x){ return '<button class="opt" data-v="' + x + '" aria-pressed="false">Sec ' + x + '</button>'; }).join('') + '</div>' +
-    '<div class="note">Your stream decides which continent you can travel to. Your level decides which gyms are open: Sec 4 can enter every gym.</div>' +
+    '<label class="lbl" for="cc">Class code <small>(optional, from your teacher)</small></label><input class="inp" id="cc" maxlength="40" autocomplete="off" autocapitalize="characters" placeholder="e.g. 2A-MATH">' +
+    '<div class="note">Your stream decides which continent you can travel to. Your level decides which gyms are open: Sec 4 can enter every gym. With a class code, your teacher can see your badges and quiz scores. You can add or change it later; use the same name as in your Math Reinforcement app.</div>' +
     '<label class="check"><input type="checkbox" id="ok"><span>I understand that my name, stream and level <b>cannot be changed</b> after I confirm.</span></label>' +
     '<div class="err" id="err" role="alert"></div><button class="btn primary wide" id="confirm" style="margin-top:14px" disabled>Confirm profile</button></div>');
   function refresh(){ $('#confirm', s).disabled = !(d.name.trim().length >= 2 && d.stream && d.level && d.ok); }
@@ -109,12 +135,13 @@ function vProfile(){
   $$('#level .opt', s).forEach(function(b){ b.addEventListener('click', function(){ d.level = +b.dataset.v; $$('#level .opt', s).forEach(function(x){ x.setAttribute('aria-pressed', x === b); }); refresh(); }); });
   $('#ok', s).addEventListener('change', function(e){ d.ok = e.target.checked; refresh(); });
   $('#confirm', s).addEventListener('click', function(){
-    var btn = $('#confirm', s), name = d.name.replace(/\s+/g, ' ').trim();
+    var btn = $('#confirm', s), name = d.name.replace(/\s+/g, ' ').trim(), code = window.GQClass ? GQClass.cleanCode($('#cc', s).value) : '';
+    if (code && !GQClass.validCode(code)){ $('#err', s).textContent = 'Check your class code, or leave it empty for now.'; return; }
     btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Registering…'; $('#err', s).textContent = '';
     BE.register({name: name, stream: d.stream, level: d.level}).then(function(r){
       if (r && r.ok === false && r.error === 'exists'){ $('#err', s).textContent = 'That name already has a profile. Add your class to your name, or ask your teacher.'; btn.textContent = 'Confirm profile'; refresh(); return; }
       if (r && r.ok === false){ $('#err', s).textContent = 'Could not register. Please check your details and try again.'; btn.textContent = 'Confirm profile'; refresh(); return; }
-      profile = {name: name, stream: d.stream, level: d.level, created: Date.now(), locked: true, char: null}; save(K.profile, profile);
+      profile = {name: name, stream: d.stream, level: d.level, created: Date.now(), locked: true, char: null, classCode: code}; save(K.profile, profile);
       go('character', {first: true});
     });
   });
@@ -296,8 +323,10 @@ function next(){
 function vResult(){
   var g = Q.gym, n = Q.items.length, score = Q.results.filter(function(r){ return r && r.ok; }).length, passed = score === n, first = passed && !prog.badges[g.id];
   prog.attempts[g.id] = (prog.attempts[g.id] || 0) + 1;
+  prog.best[g.id] = Math.max(prog.best[g.id] || 0, score);
   if (first){ prog.badges[g.id] = {at: Date.now(), score: score}; }
   save(K.prog, prog);
+  sendResult(g, score, n, passed);
   if (first) BE.score({name: profile.name, stream: profile.stream, level: profile.level, gyms: Object.keys(prog.badges), avatar: profile.char});
   chrome('Results', function(){ backToGym(g); });
   var rev = Q.items.map(function(q, i){ var r = Q.results[i];
@@ -331,8 +360,20 @@ function vMe(){
   chrome('My profile', function(){ go('map'); });
   var earned = Object.keys(prog.badges).map(function(id){ return gyms[id]; }).filter(Boolean);
   var s = screen('<div class="card"><div class="expert"><div class="big" style="width:120px">' + AV.svg(profile.char, {}) + '</div><div class="talk"><div class="tag-line">Student</div><h2>' + esc(profile.name) + '</h2><p class="lead" style="margin:4px 0 8px">' + profile.stream + ' · ' + LV[profile.level] + ' · 🔒 locked</p><button class="btn ghost" id="edit">Edit character</button></div></div></div>' +
-    '<div class="card"><h2>🏅 My badges (' + earned.length + ')</h2>' + (earned.length ? '<div class="badges" style="margin-top:10px">' + earned.map(function(g){ return '<span class="medal" title="' + esc(g.name) + '">' + badgeSVG(g) + '</span>'; }).join('') + '</div>' : '<p class="lead">No badges yet. Challenge a gym expert to earn your first!</p>') + '</div>');
+    '<div class="card"><h2>🏅 My badges (' + earned.length + ')</h2>' + (earned.length ? '<div class="badges" style="margin-top:10px">' + earned.map(function(g){ return '<span class="medal" title="' + esc(g.name) + '">' + badgeSVG(g) + '</span>'; }).join('') + '</div>' : '<p class="lead">No badges yet. Challenge a gym expert to earn your first!</p>') + '</div>' +
+    '<div class="card"><h2>🏫 My class</h2><p class="lead">Add your class code so your teacher can see your badges, quiz scores and the questions you missed. Open <b>My Progress</b> in Math Reinforcement to see them too.</p>' +
+    '<label class="lbl" for="ccin">Class code</label><input class="inp" id="ccin" maxlength="40" autocomplete="off" autocapitalize="characters" placeholder="e.g. 2A-MATH" value="' + esc(profile.classCode || '') + '">' +
+    '<div class="note" id="ccnote">' + esc(classNote(profile.classCode ? (window.GQClass && GQClass.status() !== 'idle' ? GQClass.status() : '') : 'no class')) + '</div>' +
+    '<button class="btn primary wide" id="ccsave" style="margin-top:10px">Save class code</button></div>');
   $('#edit', s).addEventListener('click', function(){ go('character', {first: false}); });
+  $('#ccsave', s).addEventListener('click', function(){
+    var code = GQClass.cleanCode($('#ccin', s).value), note = $('#ccnote', s);
+    if (code && !GQClass.validCode(code)){ note.textContent = 'Check your class code.'; return; }
+    profile.classCode = code; save(K.profile, profile);
+    if (!code){ note.textContent = classNote('no class'); return; }
+    note.innerHTML = '<span class="spin"></span>Linking…';
+    sendHistory().then(function(st){ note.textContent = classNote(st); });
+  });
 }
 
 window.__gq = {world: function(){ return WLD; }, go: go, state: function(){ return {profile: profile, prog: prog, view: view, Q: Q}; }, gyms: gyms, towns: towns};

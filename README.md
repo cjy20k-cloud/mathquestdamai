@@ -14,6 +14,7 @@ challenge a **student expert** in each gym. Answer all 10 questions right to ear
 | `js/world-data.js` | Generated: 3 continents > towns (topics) > gyms (sub topics) |
 | `js/banks.js` | Generated: the fixed 20-question bank for every gym that has one |
 | `js/backend.js`, `js/config.js` | Leaderboard client. Set `ENDPOINT` in `config.js` |
+| `js/classlink.js` | Sends every finished quiz to the main app's class server (see *Class dashboards* below) |
 | `apps-script/Code.gs` | Google Apps Script backend (leaderboard and one-profile registry) |
 | `tools/build-world.cjs` | Rebuilds `world-data.js` from the main app's `app-catalog.js` |
 | `tools/build-banks.cjs` | Rebuilds `banks.js` from the question generators (`tools/g2/`, `tools/g3/`, `tools/g3-extra.cjs`) |
@@ -44,7 +45,16 @@ challenge a **student expert** in each gym. Answer all 10 questions right to ear
 2. **Leaderboard** (optional until ready): create a Google Sheet > Extensions > Apps Script > paste `apps-script/Code.gs`,
    change `KEY`, then Deploy > Web app (Execute as *Me*, access *Anyone*). Put the `/exec` URL and the same key into
    `js/config.js`. Until then the app works fully, but the leaderboard only uses this device.
-3. **Link from the main app**: add the Netlify URL to the main app's sidebar (not done yet because the URL does not exist yet).
+3. **Link from the main app**: the main app's sidebars already have a *Gym Quest* link (`ui-system.js` sets `window.MR_GYM_QUEST_URL`, `index-shell.js` reads it). It points at `https://mathquestdamai.netlify.app/`: change that one constant if the Netlify site gets a different address.
+
+## Class dashboards (badges, scores, missed questions)
+
+A student can add a **class code** (the same code they use in the main app) when they make their profile, or later under *My profile > My class*. With a code, `js/classlink.js` sends every finished quiz to the main app's class server (`teacher-dashboard.gs`, URL and key in `js/config.js` as `CLASS_ENDPOINT` / `CLASS_KEY`, the same values the main app uses): gym, score out of 10, whether the badge was earned, and for each wrong answer the question, the right answer and what the student gave. Results that cannot be sent wait in a small outbox on the device and are retried. Adding a code later also sends everything the student has already done.
+
+* **Student**: the main app's *My Progress* page has a *Gym Quest* card (badges collection, every quiz score), looked up by the student's name and class code.
+* **Teacher**: the teacher dashboard has a *Gym Quest* panel with a scores heat map (students x gyms, best score, completion rate, average) and a most-missed-questions list that can be filtered by town or student.
+* **Completion rate** = badges earned / gyms open to the student (their stream, towns up to their level).
+* **Setup**: paste the latest `teacher-dashboard.gs` into the class server's Apps Script and redeploy it as a *new version* (it adds the `GQRes` and `GQQ` tabs, created automatically). Until then the panel says the server needs updating. Use the same name as in the main app so a student appears as one row.
 
 ## Adding questions
 
