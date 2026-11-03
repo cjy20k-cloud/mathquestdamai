@@ -3,7 +3,15 @@
    Every answer is computed from the question's own numbers, so it is right by construction;
    the build also re-checks formats (20 questions, option counts, distinct options, finite answers).
 
-   Bank formats (by the gym's school level, same pattern for every stream):
+   G3 (Express) gyms use the 'typed' format instead: all 20 answers are typed, 5-6 of them word problems
+   (tools/g3/*.cjs, one generator file per level; each gym gives its own plain + word templates).
+
+   G2 (Normal Academic) gyms (tools/g2/*.cjs) follow the school level, every bank with 5 word problems:
+     Sec 1 -> 20 multiple choice | Sec 2 -> 10 multiple choice + 10 typed | Sec 3/4 -> 20 typed.
+   A G2 template returns N(question, answer, worked, opts) for a numeric answer (typed OR turned into 4 options with
+   plausible wrong answers) or mcq(r, ...) for a multiple-choice-only question; each template may be used twice.
+
+   Bank formats (G1, by the gym's school level):
      Sec 1  -> 20 multiple choice (4 options)
      Sec 2  -> 10 answer-blank + 10 multiple choice
      Sec 3/4-> 20 answer-blank, 5 of them word problems
@@ -191,7 +199,109 @@ const GYMS = [
   {id: 'G1.3.indices-and-standard-form.1', fmt: 'blank20', blank: idxBlank, word: idxWord}
 ];
 
+/* ---------- G2 helpers ----------
+   A G2 template returns either  N(q, a, w, opt)  (a numeric answer: used as a typed blank OR turned into
+   4 multiple-choice options) or  mcq(r, ...)  (multiple choice only, for non-numeric answers).
+   opt = {wr: [likely wrong numbers], f: number -> option text}. */
+const numText = v => { v = +(+v).toFixed(6); return v < 0 ? '−' + sp(-v) : sp(v); };
+function N(q, a, w, opt){ if (!Number.isFinite(a)) throw new Error('bad answer: ' + q); opt = opt || {}; return {t: 'num', q, a: +(+a).toFixed(6), w, wr: opt.wr || [], f: opt.f || numText}; }
+const dpOf = x => (String(+(+x).toFixed(6)).split('.')[1] || '').length;
+function numToMcq(r, it){
+  const a = it.a, out = [], add = x => { x = +(+x).toFixed(6); if (Number.isFinite(x) && x !== a && !out.includes(x) && dpOf(x) <= Math.max(2, dpOf(a)) && (a < 0 || x >= 0)) out.push(x); };
+  it.wr.forEach(add);
+  if (out.length < 3){
+    const mag = Math.abs(a), dp = (String(+a.toFixed(6)).split('.')[1] || '').length, u = 10 ** -dp, step = Math.max(u, mag >= 1000 ? 100 : mag >= 100 ? 10 : mag >= 20 ? 5 : mag >= 6 ? 2 : 1);
+    const pool = r.shuffle([a + u, a - u, a + step, a - step, a + 2 * step, a - 2 * step, a * 2, a / 2, a + 10 * u, a - 10 * u, ...(Number.isInteger(a) ? [] : [a * 10, a / 10]), a + 1, a - 1, -a]);
+    for (const x of pool){ if (out.length >= 3) break; add(x); }
+  }
+  const q = mcq(r, it.q, it.f(a), out.map(it.f), it.w);
+  return q;
+}
+function buildG2(g){
+  const level = +g.id.split('.')[1], r = new R(hashStr(g.id)), out = [], seen = new Set();
+  if (g.plain.length < 8) throw new Error(g.id + ': needs at least 8 plain templates (has ' + g.plain.length + ')');
+  if (g.word.length < 3) throw new Error(g.id + ': needs at least 3 word-problem templates (has ' + g.word.length + ')');
+  const uses = new Map();
+  function take(list, n, word, asMcq){
+    let made = 0;
+    for (let pass = 0; pass < 2 && made < n; pass++){
+      for (const mk of r.shuffle(list)){
+        if (made === n) break;
+        if ((uses.get(mk) || 0) > pass) continue;
+        for (let t = 0; t < 60; t++){
+          let q = null; try { q = mk(r); } catch (e) { q = null; }
+          if (!q) continue;
+          if (q.t === 'mcq' && !asMcq) { q = null; break; }
+          if (q.t === 'num') q = asMcq ? numToMcq(r, q) : blank(q.q, q.a, q.w);
+          if (seen.has(q.q)) continue;
+          seen.add(q.q); if (word) q.word = true; out.push(q); uses.set(mk, (uses.get(mk) || 0) + 1); made++; break;
+        }
+      }
+    }
+    if (made < n) throw new Error(g.id + ': only made ' + made + ' of ' + n + (word ? ' word' : ' plain') + (asMcq ? ' mcq' : ' typed') + ' questions');
+  }
+  if (level === 1){ take(g.plain, 15, false, true); take(g.word, 5, true, true); }
+  else if (level === 2){ take(g.plain, 7, false, false); take(g.word, 3, true, false); take(g.plain, 8, false, true); take(g.word, 2, true, true); }
+  else { take(g.plain, 15, false, false); take(g.word, 5, true, false); }
+  out.forEach((q, i) => {
+    q.id = g.id + '.q' + (i + 1);
+    if (/NaN|undefined|Infinity/.test(q.q + q.w)) throw new Error('bad text ' + q.id + ': ' + q.q);
+    if (q.t === 'mcq'){
+      if (q.opts.length !== 4 || new Set(q.opts).size !== 4 || q.a < 0) throw new Error('bad options ' + q.id);
+    } else {
+      if (!Number.isFinite(q.a) || Math.abs(q.a) > 1e9) throw new Error('bad answer ' + q.id + ': ' + q.q);
+      if (!/^-?\d+(\.\d+)?$/.test(String(q.a)) || String(q.a).length > 12) throw new Error('answer cannot be typed on the keypad ' + q.id + ': ' + q.a);
+      if (Math.abs(q.a * 1e4 - Math.round(q.a * 1e4)) > 1e-6) throw new Error('answer has more than 4 decimals ' + q.id + ': ' + q.q + ' -> ' + q.a);
+      if (/\.\d{4}$/.test(String(q.a)) && !/decimal place|d\.p\.|correct to|nearest|significant/.test(q.q)) console.warn('WARN 4-decimal answer without a rounding instruction: ' + q.id + ' ' + q.a);
+    }
+  });
+  const nm = out.filter(q => q.t === 'mcq').length, nb = out.length - nm;
+  if (out.length !== 20 || (level === 1 && nm !== 20) || (level === 2 && (nm !== 10 || nb !== 10)) || (level > 2 && nb !== 20)) throw new Error(g.id + ': format (' + nm + ' mcq, ' + nb + ' typed)');
+  return out;
+}
+
+const G3DIR = path.join(__dirname, 'g3'), G2DIR = path.join(__dirname, 'g2'), G1DIR = path.join(__dirname, 'g1');
+const H = {R, hashStr, sp, sg, money, mcq, blank, gcd, divisors, PRIMES, N, numText};
+if (fs.existsSync(G3DIR)) fs.readdirSync(G3DIR).filter(f => f.endsWith('.cjs')).sort().forEach(f => require('./g3/' + f)(H).forEach(d => GYMS.push({id: d.id, fmt: 'typed', plain: d.plain, word: d.word})));
+const G3X = path.join(__dirname, 'g3-extra.cjs');
+if (fs.existsSync(G3X)) require(G3X)(H).forEach(x => {   // extra G3 templates (from the worksheet comparison): appended to the gym, always used first
+  const g = GYMS.find(d => d.id === x.id); if (!g) throw new Error('g3-extra: no such gym ' + x.id);
+  (x.plain || []).forEach(m => { m.pri = true; g.plain.push(m); }); (x.word || []).forEach(m => { m.pri = true; g.word.push(m); });
+});
+if (fs.existsSync(G1DIR)) fs.readdirSync(G1DIR).filter(f => f.endsWith('.cjs')).sort().forEach(f => require('./g1/' + f)(H).forEach(d => GYMS.push({id: d.id, fmt: 'g2', plain: d.plain, word: d.word})));
+if (fs.existsSync(G2DIR)) fs.readdirSync(G2DIR).filter(f => f.endsWith('.cjs')).sort().forEach(f => require('./g2/' + f)(H).forEach(d => GYMS.push({id: d.id, fmt: 'g2', plain: d.plain, word: d.word})));
+
+function buildTyped(g){
+  const r = new R(hashStr(g.id)), out = [], seen = new Set(), nW = Math.min(g.word.length, 6), nP = 20 - nW;
+  if (nW < 5) throw new Error(g.id + ': needs at least 5 word-problem templates (has ' + g.word.length + ')');
+  if (g.plain.length < nP) throw new Error(g.id + ': needs ' + nP + ' plain templates (has ' + g.plain.length + ')');
+  function take(list, n, word){
+    let made = 0;
+    for (const mk of list.filter(m => m.pri).concat(r.shuffle(list.filter(m => !m.pri)))){
+      if (made === n) break;
+      for (let t = 0; t < 40; t++){
+        let q = null; try { q = mk(r); } catch (e) { q = null; }
+        if (!q || seen.has(q.q)) continue;
+        seen.add(q.q); if (word) q.word = true; out.push(q); made++; break;
+      }
+    }
+    if (made < n) throw new Error(g.id + ': only made ' + made + ' of ' + n + (word ? ' word' : ' plain') + ' questions');
+  }
+  take(g.plain, nP, false); take(g.word, nW, true);
+  out.forEach((q, i) => {
+    q.id = g.id + '.q' + (i + 1);
+    if (q.t !== 'blank' || !Number.isFinite(q.a) || Math.abs(q.a) > 1e9) throw new Error('bad answer ' + q.id + ': ' + q.q);
+    if (/\.\d{4}$/.test(String(q.a)) && !/decimal place|d\.p\.|correct to|nearest|significant/.test(q.q)) console.warn('WARN 4-decimal answer without a rounding instruction (recurring decimal?): ' + q.id + ' ' + q.a);
+    if (/NaN|undefined|Infinity/.test(q.q + q.w)) throw new Error('bad text ' + q.id + ': ' + q.q);
+    if (!/^-?\d+(\.\d+)?$/.test(String(q.a)) || String(q.a).length > 12) throw new Error('answer cannot be typed on the keypad ' + q.id + ': ' + q.a);
+    if (Math.abs(q.a * 1e4 - Math.round(q.a * 1e4)) > 1e-6) throw new Error('answer has more than 4 decimals ' + q.id + ': ' + q.q + ' -> ' + q.a);
+  });
+  if (out.length !== 20) throw new Error(g.id + ': expected 20 questions');
+  return out;
+}
 function build(g){
+  if (g.fmt === 'typed') return buildTyped(g);
+  if (g.fmt === 'g2') return buildG2(g);
   const r = new R(hashStr(g.id)), out = [], seen = new Set();
   function fill(list, n, word){
     let made = 0, guard = 0, i = 0;

@@ -9,7 +9,7 @@ function $$(s, el){ return Array.prototype.slice.call((el || document).querySele
 function esc(s){ return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function hashStr(s){ var h = 2166136261; for (var i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function shuffle(a){ a = a.slice(); for (var i = a.length - 1; i > 0; i--){ var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
-function kx(l){ try{ return window.katex ? katex.renderToString(l, {throwOnError: false}) : '<code>' + esc(l) + '</code>'; }catch(e){ return '<code>' + esc(l) + '</code>'; } }
+function kx(l){ l = l.replace(/[   ]/g, '\\,'); try{ return window.katex ? katex.renderToString(l, {throwOnError: false}) : '<code>' + esc(l) + '</code>'; }catch(e){ return '<code>' + esc(l) + '</code>'; } }
 function rich(raw){   // "$...$" is maths, "\$" is a literal dollar sign
   raw = String(raw); var out = '', buf = '', math = false;
   function flush(){ if (buf){ out += math ? kx(buf) : esc(buf); buf = ''; } }
@@ -160,7 +160,7 @@ function openTalk(g){
   var line = esc(sayFor(g, !live ? 'soon' : (b ? 'beaten' : 'greet'), 0)) + (live ? '<br><span style="color:var(--muted);font-size:13px">Welcome to the <b>' + esc(g.name) + '</b> gym. Show me you really know this topic.</span>' : '');
   var d = WLD.dialog('<div class="dcard"><div class="dtop"><div class="dport">' + AV.svg(ex.cfg, {bust: true, label: 'Student expert'}) + '</div><div style="flex:1;min-width:0"><div class="dsub">Student expert · ' + esc(ex.persona.tag) + '</div><div class="dname">' + esc(ex.name) + '</div><div class="dsub" style="margin-top:2px">' + LV[lvl] + ' · ' + esc(g.name) + '</div></div>' + (b ? '<span class="medal" style="width:54px;height:54px;flex:none">' + badgeSVG(g) + '</span>' : '') + '</div>' +
     '<div class="dtext">' + line + '</div>' +
-    (live ? '<div class="rules">📝 ' + fmtText(lvl) + '<br>🎯 All 10 must be correct to earn the badge.</div>' : '') +
+    (live ? '<div class="rules">📝 ' + fmtText(lvl, g) + '<br>🎯 All 10 must be correct to earn the badge.</div>' : '') +
     '<div class="row"><button class="btn ghost" id="dno">' + (live ? 'Not yet' : 'Close') + '</button>' + (live ? '<button class="btn primary" id="dgo">' + (b ? 'Rematch!' : 'Challenge!') + '</button>' : '') + '</div></div>');
   $('#dno', d).addEventListener('click', function(){ WLD.closeDialog(); });
   if (live){ $('#dgo', d).addEventListener('click', function(){ startQuiz(g); }); $('#dgo', d).focus(); } else $('#dno', d).focus();
@@ -198,8 +198,11 @@ function vTown(id){
 }
 
 /* ================= gym intro ================= */
-function fmtText(level){
-  return level === 1 ? '10 multiple-choice questions (4 options each)' : (level === 2 ? '10 questions: 5 answer-blank and 5 multiple choice' : '10 answer-blank questions, including 3 word problems');
+function isTyped(g){ var b = BANKS[g.id]; return !!b && b.every(function(q){ return q.t === 'blank'; }); }   // all typed answers (G3)
+function fmtText(level, g){
+  if (g && isTyped(g)) return '10 typed-answer questions, including 3 word problems';
+  var b = g && BANKS[g.id], words = b && b.filter(function(q){ return q.word; }).length >= 3 ? ', including 3 word problems' : '';
+  return level === 1 ? '10 multiple-choice questions (4 options each)' + words : (level === 2 ? '10 questions: 5 answer-blank and 5 multiple choice' + words : '10 answer-blank questions, including 3 word problems');
 }
 function badgeSVG(g){ var h = gymHue(g); return '<svg viewBox="0 0 60 60" role="img" aria-label="Badge"><circle cx="30" cy="30" r="26" fill="hsl(' + h + ',70%,55%)" stroke="hsl(' + h + ',70%,35%)" stroke-width="3"/><circle cx="30" cy="30" r="19" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="2" stroke-dasharray="3 3"/><path d="M30 14l4.6 9.6 10.4 1.4-7.6 7.3 1.9 10.4L30 37.8l-9.3 4.9 1.9-10.4L15 25l10.4-1.4z" fill="#ffd43b" stroke="#c99700" stroke-width="1.2"/></svg>'; }
 function vGym(id){
@@ -207,17 +210,22 @@ function vGym(id){
   chrome(g.name, function(){ go('town', g.town.id); });
   var ex = expertFor(g), b = prog.badges[g.id], tries = prog.attempts[g.id] || 0, lvl = g.town.level;
   var s = screen('<div class="card"><div class="expert"><div class="big">' + AV.svg(ex.cfg, {label: 'Student expert'}) + '</div><div class="talk"><div class="tag-line">Student expert</div><h2>' + esc(ex.name) + '</h2><div class="bubble" style="margin-top:8px">' + (b ? 'You already beat me! Want to try again and see if you can still get all 10?' : 'Welcome to the <b>' + esc(g.name) + '</b> gym! Show me you really know this topic.') + '</div></div></div>' +
-    '<div class="rulebox">📝 ' + fmtText(lvl) + '<br>🎯 You must answer <b>all 10 correctly</b> to earn the badge.<br>🔁 Each attempt draws a fresh 10 from my bank of 20 questions.</div>' +
+    '<div class="rulebox">📝 ' + fmtText(lvl, g) + '<br>🎯 You must answer <b>all 10 correctly</b> to earn the badge.<br>🔁 Each attempt draws a fresh 10 from my bank of 20 questions.</div>' +
     '<div class="row" style="align-items:center;margin-bottom:12px"><div style="flex:0 0 66px"><span class="medal">' + badgeSVG(g) + '</span></div><div style="font-weight:800;font-size:14px;line-height:1.5">' + (b ? '🏅 Badge earned' : 'Badge not earned yet') + '<br><span style="color:var(--muted)">Attempts so far: ' + tries + '</span></div></div>' +
     '<button class="btn primary wide" id="start">' + (b ? 'Challenge again' : 'Start the challenge') + '</button></div>');
   $('#start', s).addEventListener('click', function(){ startQuiz(g); });
 }
 
 /* ================= quiz ================= */
+function drawMix(list, n, nWord){   // n random questions, nWord of them word problems when the list has enough
+  var w = shuffle(list.filter(function(q){ return q.word; })).slice(0, nWord);
+  return w.concat(shuffle(list.filter(function(q){ return !q.word; })).slice(0, n - w.length));
+}
 function pickQuiz(bank, level){
-  if (level === 1) return shuffle(bank).slice(0, 10);
-  if (level === 2) return shuffle(shuffle(bank.filter(function(q){ return q.t === 'mcq'; })).slice(0, 5).concat(shuffle(bank.filter(function(q){ return q.t === 'blank'; })).slice(0, 5)));
-  return shuffle(shuffle(bank.filter(function(q){ return q.word; })).slice(0, 3).concat(shuffle(bank.filter(function(q){ return !q.word; })).slice(0, 7)));
+  var typed = bank.every(function(q){ return q.t === 'blank'; });
+  if (!typed && level === 1) return shuffle(drawMix(bank, 10, 3));
+  if (!typed && level === 2) return shuffle(drawMix(bank.filter(function(q){ return q.t === 'mcq'; }), 5, 1).concat(drawMix(bank.filter(function(q){ return q.t === 'blank'; }), 5, 2)));
+  return shuffle(drawMix(bank, 10, 3));
 }
 function startQuiz(g){
   var items = pickQuiz(BANKS[g.id], g.town.level);
