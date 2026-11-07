@@ -9,7 +9,8 @@ challenge a **student expert** in each gym. Answer all 10 questions right to ear
 | Path | What it is |
 |---|---|
 | `index.html`, `css/`, `js/app.js` | The app (no build step, no dependencies) |
-| `js/avatar.js` | Character art: 2 sexes x 3 outfits, 10 hairstyles, 10 accessories each, skin and hair colours (all drawn in code) |
+| `js/avatar.js` | Character art: 2 sexes x 3 outfits, 10 hairstyles, 10 accessories each, skin and hair colours (all drawn in code, glossy cartoon style with dark outlines to match the trailer) |
+| `assets/` | Art made with Higgsfield (see *Look and art* below): `trailer.mp4` (8 s loop, no sound), `key-art.jpg`, `world.jpg`, `hero.jpg`, `cast.jpg` |
 | `js/world.js` | The walk-around map (canvas): towns, gym buildings, an expert at every door, level gates, continent map, touch D-pad |
 | `js/world-data.js` | Generated: 3 continents > towns (topics) > gyms (sub topics) |
 | `js/banks.js` | Generated: the fixed 20-question bank for every gym that has one |
@@ -55,6 +56,21 @@ A student can add a **class code** (the same code they use in the main app) when
 * **Teacher**: the teacher dashboard has a *Gym Quest* panel with a scores heat map (students x gyms, best score, completion rate, average) and a most-missed-questions list that can be filtered by town or student.
 * **Completion rate** = badges earned / gyms open to the student (their stream, towns up to their level).
 * **Setup**: paste the latest `teacher-dashboard.gs` into the class server's Apps Script and redeploy it as a *new version* (it adds the `GQRes` and `GQQ` tabs, created automatically). Until then the panel says the server needs updating. Use the same name as in the main app so a student appears as one row.
+
+## Look and art
+
+The look comes from a trailer made with Higgsfield: glossy 3D-cartoon, navy-and-gold school uniforms, sky islands, glowing maths symbols.
+
+| Asset | Made with | Used for |
+|---|---|---|
+| `key-art.jpg` (key art, `gpt_image_2_5`) and `trailer.mp4` (8 s, `kling3_0` image-to-video from the key art) | Higgsfield | Welcome screen background (the video plays muted on a loop; the still shows for reduced motion) |
+| `world.jpg` (floating-islands world) | Higgsfield | Page backdrop, continent banners, expert portrait backgrounds |
+| `cast.jpg` (eight student experts) | Higgsfield | "Meet the student experts" card; the character art in `avatar.js` follows this style |
+| `hero.jpg` | Higgsfield | Backdrop behind the character builder preview |
+
+Everything in `assets/` is about 1.7 MB. `tools/build-site.cjs` copies `assets/` into `dist/`.
+The medals are drawn in code by `badgeSVG()` in `js/app.js` (a gem colour and one of eight maths emblems per gym, in the style of the trailer's badge art).
+Students who prefer reduced motion get no video, no drifting symbols and no confetti.
 
 ## Adding questions
 

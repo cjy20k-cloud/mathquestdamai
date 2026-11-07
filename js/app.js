@@ -111,10 +111,20 @@ function boot(){
 /* ================= welcome ================= */
 function vHome(){
   chrome('Gym Quest', null);
-  var cast = [0, 1, 2].map(function(i){ return AV.svg(AV.randomCfg('hero' + i), {}); }).join('');
-  var s = screen('<div class="hero"><h1>Gym Quest</h1><div class="hero-cast">' + cast + '</div><p>Create your profile and a character, travel your continent and challenge a student expert in every gym. Answer all 10 questions right to win the badge.</p><button class="btn" id="go" style="background:#fff;color:#1f2340">Create my profile</button></div>' +
-    '<div class="card"><h2>How it works</h2><div class="stack" style="margin-top:8px;font-weight:700;line-height:1.5"><div>1. Make a profile: your name, stream and level. <b>It can\'t be changed once confirmed.</b></div><div>2. Design your character: a head, a hairstyle and an accessory.</div><div>3. Explore your continent. Every topic is a town and every sub topic is a gym.</div><div>4. Beat the student expert: 10 questions, all must be right.</div></div></div>');
+  var nGyms = Object.keys(gyms).length, nQs = Object.keys(BANKS).reduce(function(n, id){ return n + BANKS[id].length; }, 0);
+  var s = screen('<section class="hero2"><video autoplay muted loop playsinline preload="metadata" poster="assets/key-art.jpg" aria-hidden="true"><source src="assets/trailer.mp4" type="video/mp4"></video><div class="hc hct">' +
+    '<div class="kicker">The maths adventure</div><h1 class="logo">GYM<span>QUEST</span></h1></div><div class="hc hcb">' +
+    '<p>Create your profile and a character, travel your continent and challenge a student expert in every gym. Answer all 10 questions right to win the badge.</p>' +
+    '<button class="btn primary big" id="go">Create my profile &#9654;</button>' +
+    '<div class="stats"><b><em>' + nGyms + '</em> gyms</b><b><em>' + WORLD.continents.length + '</em> continents</b><b><em>' + nQs.toLocaleString('en') + '</em> questions</b></div></div></section>' +
+    '<div class="castcard"><img src="assets/cast.jpg" width="1280" height="716" alt="Eight student experts in navy and gold school uniforms, each with a different maths gadget" loading="lazy"><div class="cap"><h2>Meet the student experts</h2><p>One waits at the door of every gym. Answer all 10 questions to beat them.</p></div></div>' +
+    '<div class="card"><h2>How it works</h2><div class="steps">' +
+    '<div class="step"><i>1</i>Make a profile: your name, stream and level. <b>It can\'t be changed once confirmed.</b></div>' +
+    '<div class="step"><i>2</i>Design your character: a head, a hairstyle and an accessory.</div>' +
+    '<div class="step"><i>3</i>Explore your continent. Every topic is a town and every sub topic is a gym.</div>' +
+    '<div class="step"><i>4</i>Beat the student expert: 10 questions, all must be right.</div></div></div>');
   $('#go', s).addEventListener('click', function(){ go('profile'); });
+  var vid = $('video', s); if (vid){ vid.muted = true; var pl = vid.play && vid.play(); if (pl && pl.catch) pl.catch(function(){}); }
 }
 
 /* ================= profile ================= */
@@ -231,7 +241,28 @@ function fmtText(level, g){
   var b = g && BANKS[g.id], words = b && b.filter(function(q){ return q.word; }).length >= 3 ? ', including 3 word problems' : '';
   return level === 1 ? '10 multiple-choice questions (4 options each)' + words : (level === 2 ? '10 questions: 5 answer-blank and 5 multiple choice' + words : '10 answer-blank questions, including 3 word problems');
 }
-function badgeSVG(g){ var h = gymHue(g); return '<svg viewBox="0 0 60 60" role="img" aria-label="Badge"><circle cx="30" cy="30" r="26" fill="hsl(' + h + ',70%,55%)" stroke="hsl(' + h + ',70%,35%)" stroke-width="3"/><circle cx="30" cy="30" r="19" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="2" stroke-dasharray="3 3"/><path d="M30 14l4.6 9.6 10.4 1.4-7.6 7.3 1.9 10.4L30 37.8l-9.3 4.9 1.9-10.4L15 25l10.4-1.4z" fill="#ffd43b" stroke="#c99700" stroke-width="1.2"/></svg>'; }
+/* glossy medal: gold rim, a gem colour per gym, one of eight maths emblems (same look as the trailer's badges) */
+function badgeSVG(g){
+  var hs = hashStr(g.id), h = hs % 360, e = (hs >>> 9) % 8, shield = ((hs >>> 5) & 1) === 1, u = 'b' + (hs % 1000003), K = '#241d3b', G = '#ffd54a';
+  function line(d, w){ return '<path d="' + d + '" fill="none" stroke="' + K + '" stroke-width="' + (w + 2.6) + '" stroke-linecap="round" stroke-linejoin="round"/><path d="' + d + '" fill="none" stroke="' + G + '" stroke-width="' + w + '" stroke-linecap="round" stroke-linejoin="round"/>'; }
+  function fill(d, extra){ return '<path d="' + d + '" fill="' + G + '" stroke="' + K + '" stroke-width="1.6" stroke-linejoin="round"' + (extra || '') + '/>'; }
+  var emblem = [
+    fill('M30 16.5l4.2 8.8 9.6 1.3-7 6.7 1.8 9.5L30 38.2l-8.6 4.6 1.8-9.5-7-6.7 9.6-1.3z'),
+    line('M19 22.5H41', 3.4) + line('M25 22.5C25 31 24 36.5 21 40.5', 3.4) + line('M35 22.5V36C35 39 36.5 40.5 40 40', 3.4),
+    fill('M30 17L43.5 41H16.5Z') + '<path d="M30 17L43.5 41H30Z" fill="#d98e08" opacity=".5"/>',
+    '<circle cx="30" cy="30" r="11" fill="none" stroke="' + K + '" stroke-width="5.6"/><circle cx="30" cy="30" r="11" fill="none" stroke="' + G + '" stroke-width="3"/>' + line('M30 30L38.5 21.5', 3) + '<circle cx="30" cy="30" r="2.6" fill="' + G + '" stroke="' + K + '" stroke-width="1.3"/>',
+    line('M20 17V41H43', 3) + line('M23 36C29 36 32 22 42 21', 3),
+    '<rect x="18" y="18" width="24" height="24" rx="6" fill="' + G + '" stroke="' + K + '" stroke-width="1.6"/>' + [[24, 24], [36, 36], [30, 30], [24, 36], [36, 24]].map(function(p){ return '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="2.3" fill="' + K + '"/>'; }).join(''),
+    fill('M30 16.5L42.5 23.5V37L30 44L17.5 37V23.5Z') + '<path d="M30 30L42.5 23.5V37L30 44Z" fill="#d98e08" opacity=".5"/><path d="M30 30L42.5 23.5M30 30L17.5 23.5M30 30V44" fill="none" stroke="' + K + '" stroke-width="1.4" stroke-linejoin="round"/>',
+    '<g transform="rotate(-40 30 30)"><rect x="13" y="23.5" width="34" height="13" rx="2.6" fill="' + G + '" stroke="' + K + '" stroke-width="1.6"/>' + [19, 24, 29, 34, 39].map(function(x, i){ return '<path d="M' + x + ' 23.8V' + (i % 2 ? 29 : 31.5) + '" stroke="' + K + '" stroke-width="1.3"/>'; }).join('') + '</g>'
+  ][e];
+  var base = shield
+    ? '<path d="M30 2.5L54 10V31C54 45.5 43 54 30 58.5C17 54 6 45.5 6 31V10Z" fill="url(#' + u + 'r)" stroke="' + K + '" stroke-width="2.4" stroke-linejoin="round"/><path d="M30 8L48.5 13.6V31C48.5 41.6 40.6 48.4 30 52.4C19.4 48.4 11.5 41.6 11.5 31V13.6Z" fill="url(#' + u + 'g)" stroke="#a8730b" stroke-width="1.2"/><path d="M15 15.5L30 10.5V30Z" fill="#fff" opacity=".2"/>'
+    : '<circle cx="30" cy="30" r="27.5" fill="url(#' + u + 'r)" stroke="' + K + '" stroke-width="2.4"/><circle cx="30" cy="30" r="21.5" fill="url(#' + u + 'g)" stroke="#a8730b" stroke-width="1.2"/><path d="M12.5 25A18.5 18.5 0 0 1 30 11.5 18.5 18.5 0 0 1 44 17 22 22 0 0 0 12.5 25Z" fill="#fff" opacity=".28"/>';
+  return '<svg viewBox="0 0 60 60" role="img" aria-label="Badge"><defs><linearGradient id="' + u + 'r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0a6"/><stop offset=".5" stop-color="#ffc233"/><stop offset="1" stop-color="#c47a0a"/></linearGradient>' +
+    '<radialGradient id="' + u + 'g" cx=".35" cy=".28" r=".85"><stop offset="0" stop-color="hsl(' + h + ',92%,74%)"/><stop offset=".55" stop-color="hsl(' + h + ',82%,48%)"/><stop offset="1" stop-color="hsl(' + h + ',78%,28%)"/></radialGradient></defs>' +
+    base + emblem + '<path d="M47.5 10l1.5 3.5 3.5 1.5-3.5 1.5-1.5 3.5-1.5-3.5-3.5-1.5 3.5-1.5z" fill="#fff"/></svg>';
+}
 function vGym(id){
   var g = gyms[id]; if (!g || !allowed(g.town) || !hasBank(g)) return go('map');
   chrome(g.name, function(){ go('town', g.town.id); });
@@ -331,12 +362,25 @@ function vResult(){
   chrome('Results', function(){ backToGym(g); });
   var rev = Q.items.map(function(q, i){ var r = Q.results[i];
     return '<div class="rv' + (r.ok ? '' : ' no') + '"><b>' + (r.ok ? '✅' : '❌') + ' Q' + (i + 1) + '.</b> ' + rich(q.q) + (r.ok ? '' : '<br><b>Correct answer:</b> ' + fmtAns(q) + (q.w ? '<br>' + rich(q.w) : '')) + '</div>'; }).join('');
-  var s = screen(coach(passed ? 'win' : 'lose', 'res') + '<div class="card" style="text-align:center">' + (passed ? '<span class="medal" style="width:96px;height:96px">' + badgeSVG(g) + '</span><h2>' + (first ? 'Badge earned!' : 'Perfect again!') + '</h2><p class="lead">You answered all ' + n + ' questions correctly in the ' + esc(g.name) + ' gym.</p>' : '<div class="score">' + score + '/' + n + '</div><h2>So close!</h2><p class="lead">You need all ' + n + ' correct to earn the badge. Study the answers below and try again with a fresh set.</p>') +
+  var s = screen(coach(passed ? 'win' : 'lose', 'res') + '<div class="card" style="text-align:center">' + (passed ? '<div class="reveal"><i class="rays"></i><span class="medal">' + badgeSVG(g) + '</span></div><h2>' + (first ? 'Badge earned!' : 'Perfect again!') + '</h2><p class="lead">You answered all ' + n + ' questions correctly in the ' + esc(g.name) + ' gym.</p>' : '<div class="score">' + score + '/' + n + '</div><h2>So close!</h2><p class="lead">You need all ' + n + ' correct to earn the badge. Study the answers below and try again with a fresh set.</p>') +
     '<div class="row"><button class="btn ghost" id="town">' + (mapMode === 'world' ? 'Back to the map' : 'Back to the town') + '</button><button class="btn primary" id="again">' + (passed ? 'Play again' : 'Try again') + '</button></div></div>' +
     '<div class="card"><h2>Review</h2><div class="review">' + rev + '</div></div>');
   $('#town', s).addEventListener('click', function(){ backToGym(g); });
   $('#again', s).addEventListener('click', function(){ startQuiz(g); });
+  if (passed) confetti(first ? 64 : 26);
   if (first) toast('🏅 New badge: ' + g.name);
+}
+/* a short burst of paper confetti; skipped when the student prefers reduced motion */
+function confetti(n){
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var old = $('.confetti'); if (old) old.remove();
+  var cols = ['#ffc83a', '#ff5d9a', '#5b7cff', '#2ed1b4', '#ff8a1f', '#9b6bff', '#6adf4a'], box = document.createElement('div'); box.className = 'confetti'; box.setAttribute('aria-hidden', 'true');
+  for (var i = 0; i < n; i++){
+    var p = document.createElement('i');
+    p.style.cssText = '--x:' + (Math.random() * 100).toFixed(1) + '%;--c:' + cols[i % cols.length] + ';--w:' + (7 + Math.random() * 7).toFixed(1) + 'px;--d:' + (2.2 + Math.random() * 1.8).toFixed(2) + 's;--dl:' + (Math.random() * 0.7).toFixed(2) + 's;--r:' + Math.round((Math.random() - 0.5) * 1400) + 'deg';
+    box.appendChild(p);
+  }
+  document.body.appendChild(box); setTimeout(function(){ box.remove(); }, 5200);
 }
 
 /* ================= leaderboard + profile ================= */
