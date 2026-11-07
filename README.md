@@ -9,7 +9,7 @@ challenge a **student expert** in each gym. Answer all 10 questions right to ear
 | Path | What it is |
 |---|---|
 | `index.html`, `css/`, `js/app.js` | The app (no build step, no dependencies) |
-| `js/avatar.js` | Character art: 2 sexes x 3 outfits, 10 hairstyles, 10 accessories each, skin and hair colours (all drawn in code, glossy cartoon style with dark outlines to match the trailer) |
+| `js/avatar.js` | Character art: 2 sexes x 3 outfits (all white; PE shirt with long pants; PE shirt with black shorts), 16 hairstyles, 10 accessories each, skin and hair colours (all drawn in code, glossy cartoon style with dark outlines to match the trailer) |
 | `assets/` | Art made with Higgsfield (see *Look and art* below): `trailer.mp4` (8 s loop, no sound), `key-art.jpg`, `world.jpg`, `hero.jpg`, `cast.jpg` |
 | `js/world.js` | The walk-around map (canvas): towns, gym buildings, an expert at every door, level gates, continent map, touch D-pad |
 | `js/world-data.js` | Generated: 3 continents > towns (topics) > gyms (sub topics) |
